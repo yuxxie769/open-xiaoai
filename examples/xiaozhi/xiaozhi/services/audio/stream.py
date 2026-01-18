@@ -63,6 +63,7 @@ class MyStream:
     def is_active(self) -> bool:
         return self._is_active
 
+    # 注册stream对象为麦克风input广播的reader之一
     def start_stream(self) -> None:
         if not self._is_active:
             self._is_active = True
@@ -82,6 +83,7 @@ class MyStream:
             return
         GlobalStream.output(frames)
 
+    # 一旦麦克风收到信号，通过 GlobalStream 广播拿到信号数据并处理
     def input(self, data: bytes):
         # 收到麦克风输入音频流
         if not self._is_input or not self._is_active:

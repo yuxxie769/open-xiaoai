@@ -41,6 +41,17 @@ APP_CONFIG = {
         "OTA_URL": "https://api.tenclass.net/xiaozhi/ota/",
         "WEBSOCKET_URL": "wss://api.tenclass.net/xiaozhi/v1/",
     },
+    "schedule": {
+        # 定时任务（可选）
+        "jobs": [
+            # 每天 07:30 唤醒并播放音频链接
+            # {"type": "daily", "at": "07:30", "action": "play_url", "url": "https://example.com/hello.mp3", "silent_wake": False},
+            # 每隔 1 小时播报一次
+            # {"type": "interval", "every_seconds": 3600, "action": "play_tts", "text": "整点报时", "silent_wake": False},
+            # 定时把文本发给小智服务端，让服务端走正常对话并返回语音（需要服务端支持）
+            # {"type": "daily", "at": "08:00", "action": "chat_xiaozhi", "text": "早上好，请播报今天的天气。", "abort_before": False},
+        ]
+    },
 }
 ```
 

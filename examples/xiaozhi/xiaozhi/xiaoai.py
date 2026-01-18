@@ -26,9 +26,11 @@ class XiaoAI:
     speaker = SpeakerManager()
     async_loop: asyncio.AbstractEventLoop = None
 
+    # 类方法
+    # 解析启动命令行
     @classmethod
-    def setup_mode(cls):
-        set_xiaoai(cls)
+    def setup_mode(cls): #类方法使用cls，对应普通方法的self
+        set_xiaoai(cls) #把 XiaoAI 这个类本身，注册成“当前使用的小爱接口实现”
         parser = argparse.ArgumentParser(
             description="小爱音箱接入小智 AI | by: https://del.wang"
         )

@@ -99,6 +99,13 @@ class XiaoZhi:
         VAD.start()
         KWS.start()
 
+        try:
+            from xiaozhi.services.scheduler import Scheduler
+
+            Scheduler.start()
+        except Exception:
+            pass
+
         # 启动 GUI
         self._initialize_display()
         self.display.start()
@@ -255,7 +262,7 @@ class XiaoZhi:
         state = data.get("state", "")
         if state == "start":
             EventManager.on_tts_start(data.get("session_id"))
-            self.schedule(lambda: self._handle_tts_start())
+            self.schedule(lambda: self._handle_tts_start()) #标记DeviceState为SPEAKING
         elif state == "stop":
             EventManager.on_tts_end(data.get("session_id"))
             self.schedule(lambda: self._handle_tts_stop())
@@ -274,6 +281,7 @@ class XiaoZhi:
 
                 self.schedule(lambda: self.set_chat_message("assistant", text))
 
+    #转换DeviceState为SPEAKING
     def _handle_tts_start(self):
         """处理TTS开始事件"""
         if (
@@ -455,6 +463,13 @@ class XiaoZhi:
     def shutdown(self):
         """关闭应用程序"""
         self.running = False
+
+        try:
+            from xiaozhi.services.scheduler import Scheduler
+
+            Scheduler.stop()
+        except Exception:
+            pass
 
         # 关闭音频编解码器
         if self.audio_codec:

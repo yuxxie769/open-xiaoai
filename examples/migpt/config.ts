@@ -13,15 +13,15 @@ export const kOpenXiaoAIConfig: OpenXiaoAIConfig = {
      * - ❌ https://api.openai.com/v1/（最后多了一个 /
      * - ❌ https://api.openai.com/v1/chat/completions（不需要加 /chat/completions）
      */
-    baseURL: "https://api.openai.com/v1",
+    baseURL: "https://openrouter.ai/api/v1",
     /**
      * API 密钥
      */
-    apiKey: "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    apiKey: "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",
     /**
      * 模型名称
      */
-    model: "gpt-4.1-mini",
+    model: "google/gemini-3-flash-preview",
   },
   prompt: {
     /**
@@ -42,16 +42,28 @@ export const kOpenXiaoAIConfig: OpenXiaoAIConfig = {
    * - 你知道世界上跑的最快的动物是什么吗？
    */
   callAIKeywords: ["请", "你"],
+  wakeUpKeywords: ["打开", "进入", "召唤"],
+  onEnterAI: ["gemini接管"],
+  onAIError: ["Gemini出错了，请稍后再试吧！"],
   /**
    * 自定义消息回复
    */
   async onMessage(engine, { text }) {
+    
+
     if (text === "测试播放文字") {
       return { text: "你好，很高兴认识你！" };
     }
 
     if (text === "测试播放音乐") {
       return { url: "https://example.com/hello.mp3" };
+    }
+
+    if (text.startsWith("闭嘴") || text.startsWith("停一下")) {
+      // 打断原来小爱的回复
+      await engine.speaker.abortXiaoAI();
+      await sleep(2000); 
+      return { handled: true };
     }
 
     if (text === "测试其他能力") {

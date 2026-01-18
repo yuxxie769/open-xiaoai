@@ -9,7 +9,7 @@ def main():
     XiaoZhi.instance().run()
     return 0
 
-
+# 程序退出信号处理器
 def setup_graceful_shutdown():
     def signal_handler(_sig, _frame):
         XiaoZhi.instance().shutdown()
@@ -19,6 +19,6 @@ def setup_graceful_shutdown():
 
 
 if __name__ == "__main__":
-    XiaoAI.setup_mode()
-    setup_graceful_shutdown()
-    sys.exit(main())
+    XiaoAI.setup_mode() #读取命令行，注册xiaoai类
+    setup_graceful_shutdown() 
+    sys.exit(main()) #启动主程序
