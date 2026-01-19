@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from config import APP_CONFIG
 from xiaozhi.ref import get_speaker, get_xiaoai, get_xiaozhi
-from xiaozhi.services.protocols.typing import AbortReason
+from xiaozhi.services.protocols.typing import AbortReason, DeviceState
 
 ScheduleType = Literal["interval", "daily"]
 ScheduleAction = Literal["play_url", "play_tts", "ask_xiaoai", "chat_xiaozhi"]
@@ -95,19 +95,23 @@ async def _execute_xiaozhi_job(job: ScheduleJob):
         return
 
     try:
-        if job.abort_before:
+        if job.abort_before and getattr(xiaozhi, "device_state", None) == DeviceState.SPEAKING:
             await protocol.send_abort_speaking(AbortReason.ABORT)
     except Exception:
         pass
 
     if job.action == "chat_xiaozhi" and job.text:
+        session_id = getattr(protocol, "session_id", "") or ""
         await protocol.send_text(
             json.dumps(
                 {
-                    "session_id": "",
-                    "type": "stt",
+                    "type": "listen",
+                    "state": "detect",
                     "text": job.text,
-                }
+                    "source": "text",
+                    "session_id": session_id,
+                },
+                ensure_ascii=False,
             )
         )
 

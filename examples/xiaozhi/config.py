@@ -112,14 +112,14 @@ APP_CONFIG = {
             #     "silent_wake": False,
             #     "blocking": True,
             # },
-            # {
-            #     "name": "test_chat",
-            #     "type": "interval",
-            #     "every_seconds": 20,
-            #     "action": "chat_xiaozhi",
-            #     "text": "你好，现在开始播报一条测试消息",
-            #     "abort_before": True,  # 是否在触发前打断正在播报的语音
-            # },
+            {
+                "name": "test_chat",
+                "type": "interval",
+                "every_seconds": 20,
+                "action": "chat_xiaozhi",
+                "text": "你好，现在开始播报一条测试消息",
+                "abort_before": True,  # 是否在触发前打断正在播报的语音
+            },
         ],
     },
 }

@@ -156,6 +156,10 @@ class WebsocketProtocol(Protocol):
             if not transport or transport != "websocket":
                 return
 
+            session_id = data.get("session_id")
+            if session_id:
+                self.session_id = session_id
+
             # TODO 使用默认的 24k 采样率
             # xiaozhi-esp32-server 返回的参数是 16k 采样率，但实际用的是 24k 采样率
 

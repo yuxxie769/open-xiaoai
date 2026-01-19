@@ -53,10 +53,10 @@ class _KWS:
             # 读取缓冲区音频数据
             frames = self.stream.read()
 
-            # 在说话和监听状态时，短暂休眠KWS后继续循环
+            # 在【无输入】【KWS暂停】【TTS播放和监听用户说话状态时】，短暂休眠KWS后继续循环
             if (
-                not frames
-                or self.paused
+                not frames # 未监听到任何输入声音
+                or self.paused #KWS本身进入pause状态
                 or get_xiaozhi().device_state
                 in [
                     DeviceState.LISTENING,
@@ -70,9 +70,9 @@ class _KWS:
             result = SherpaOnnx.kws(frames)
             if result:
                 print(f"🔥 触发唤醒: {result}")
-                self.on_message(result) # 调用唤醒方法
+                self.on_message(result) # 确认唤醒，调用本地唤醒方法
 
-    # 调用 EventManager ， 进入 on_wakeup STEP
+    # 本地唤醒方法，会去调用 EventManager ， 进入 on_wakeup STEP
     def on_message(self, text: str):
         asyncio.run_coroutine_threadsafe(
             EventManager.wakeup(text, "kws"),

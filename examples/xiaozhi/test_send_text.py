@@ -1,115 +1,99 @@
-import argparse
-import asyncio
-import json
-import uuid
-
+import asyncio, json, uuid, wave
 import websockets
+import opuslib
 
+WS_URL = "ws://192.168.7.127:8001/xiaozhi/v1/"   # 改成你的服务端
+TOKEN  = ""                        # auth 关着一般也可随便填；开了就填正确 token
+DEVICE_ID = "11:22:33:44:55:66"              # 随便写个像 MAC 的即可
+CLIENT_ID = str(uuid.uuid4())
 
+def frame_size(sample_rate: int, frame_duration_ms: int) -> int:
+    # Opus 解码需要指定一帧有多少采样点
+    return int(sample_rate * frame_duration_ms / 1000)
 
-def _build_headers(token: str, device_id: str | None, client_id: str | None) -> dict[str, str]:
-    headers: dict[str, str] = {"Protocol-Version": "1"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    if device_id:
-        headers["Device-Id"] = device_id
-    headers["Client-Id"] = client_id or str(uuid.uuid4())
-    return headers
-
-
-async def _run(
-    url: str,
-    text: str,
-    token: str,
-    device_id: str | None,
-    client_id: str | None,
-    timeout_s: float,
-) -> int:
-    hello_message = {
-        "type": "hello",
-        "version": 1,
-        "transport": "websocket",
-        "audio_params": {
-            "format": "opus",
-            "sample_rate": 16000,
-            "channels": 1,
-            "frame_duration": 60,
-        },
+async def main(text: str, out_wav: str = "out.wav"):
+    headers = {
+        "Authorization": f"Bearer {TOKEN}",
+        "Protocol-Version": "1",
+        "Client-Id": CLIENT_ID,
+        "Device-Id": DEVICE_ID,
     }
 
-    headers = _build_headers(token=token, device_id=device_id, client_id=client_id)
-    async with websockets.connect(uri=url, additional_headers=headers) as ws:
-        await ws.send(json.dumps(hello_message))
-        print(f"connected: {url}")
+    async with websockets.connect(WS_URL, additional_headers=headers, ping_interval=None) as ws:
+        # 1) hello（先用你本地配置的默认值发，服务端会回它实际用的参数）
+        hello = {
+            "type": "hello",
+            "version": 1,
+            "transport": "websocket",
+            "audio_params": {
+                "format": "opus",
+                "sample_rate": 16000,
+                "channels": 1,
+                "frame_duration": 60
+            }
+        }
+        await ws.send(json.dumps(hello, ensure_ascii=False))
 
-        session_id = ""
-        hello_deadline = asyncio.get_running_loop().time() + min(5.0, timeout_s)
-        while asyncio.get_running_loop().time() < hello_deadline:
+        # 2) 等服务端 hello，拿 session_id + audio_params
+        session_id = None
+        sr = 16000
+        ch = 1
+        fd = 60
+
+        while True:
             msg = await ws.recv()
             if isinstance(msg, (bytes, bytearray)):
                 continue
-            try:
-                data = json.loads(msg)
-            except Exception:
-                continue
+            data = json.loads(msg)
             if data.get("type") == "hello":
-                session_id = str(data.get("session_id") or "")
-                print(f"recv hello: session_id={session_id}")
+                session_id = data["session_id"]
+                ap = data.get("audio_params", {})
+                sr = int(ap.get("sample_rate", sr))
+                ch = int(ap.get("channels", ch))
+                fd = int(ap.get("frame_duration", fd))
                 break
 
-        await ws.send(json.dumps({"session_id": session_id, "type": "stt", "text": text}))
-        print(f"sent stt: {text} (session_id={session_id or '<empty>'})")
+        dec = opuslib.Decoder(sr, ch)
+        fs = frame_size(sr, fd)
 
-        async def _recv_loop():
-            audio_frames = 0
-            audio_bytes = 0
-            async for message in ws:
-                if isinstance(message, (bytes, bytearray)):
-                    audio_frames += 1
-                    audio_bytes += len(message)
-                    if audio_frames == 1 or audio_frames % 50 == 0:
-                        print(f"recv audio: frames={audio_frames} bytes={audio_bytes}")
-                    continue
-
-                try:
-                    data = json.loads(message)
-                except Exception:
-                    print(f"recv text: {message}")
-                    continue
-
-                msg_type = data.get("type")
-                if msg_type == "tts":
-                    print(f"recv tts: state={data.get('state')} text={data.get('text','')}")
-                else:
-                    print(f"recv json: {data}")
-
-        try:
-            await asyncio.wait_for(_recv_loop(), timeout=timeout_s)
-        except asyncio.TimeoutError:
-            print(f"timeout after {timeout_s}s")
-            return 0
+        # 发送“文本输入”（用 listen/detect，而不是 stt）
+        await ws.send(json.dumps({
+            "type": "listen",
+            "state": "detect",
+            "text": text,
+            "source": "text",
+            "session_id": session_id
+        }, ensure_ascii=False))
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Send fixed STT text to XiaoZhi server (no config.py)")
-    parser.add_argument("--url", type=str, required=True, help="e.g. ws://127.0.0.1:8001/xiaozhi/v1/")
-    parser.add_argument("--token", type=str, default="")
-    parser.add_argument("--device-id", type=str, default="")
-    parser.add_argument("--client-id", type=str, default="")
-    parser.add_argument("--text", type=str, default="你好小智，做一个连通性测试")
-    parser.add_argument("--timeout", type=float, default=15.0)
-    args = parser.parse_args()
-    return asyncio.run(
-        _run(
-            url=args.url,
-            text=args.text,
-            token=args.token,
-            device_id=args.device_id or None,
-            client_id=args.client_id or None,
-            timeout_s=args.timeout,
-        )
-    )
+        # 4) 收 tts 音频 binary 帧，解码写 wav，直到 tts stop
+        wf = wave.open(out_wav, "wb")
+        wf.setnchannels(ch)
+        wf.setsampwidth(2)      # 16-bit PCM
+        wf.setframerate(sr)
 
+        in_tts = False
+        while True:
+            msg = await ws.recv()
+
+            if isinstance(msg, (bytes, bytearray)):
+                if in_tts:
+                    pcm = dec.decode(msg, fs, decode_fec=False)
+                    wf.writeframes(pcm)
+                continue
+
+            data = json.loads(msg)
+            t = data.get("type")
+
+            if t == "tts":
+                state = data.get("state")
+                if state in ("start", "sentence_start"):
+                    in_tts = True
+                elif state == "stop":
+                    break
+
+        wf.close()
+        print(f"Saved: {out_wav}")
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    asyncio.run(main("你好，给我一句日语自我介绍，并用可爱的语气。", "reply.wav"))
