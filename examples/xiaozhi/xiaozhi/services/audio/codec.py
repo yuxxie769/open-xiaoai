@@ -1,5 +1,8 @@
 import opuslib_next as opuslib
 
+import numpy as np
+
+from config import APP_CONFIG
 from xiaozhi.ref import (
     get_speech_frames,
     get_xiaozhi,
@@ -25,6 +28,24 @@ class AudioCodec:
 
         self._initialize_audio()
         set_audio_codec(self)
+
+    @staticmethod
+    def _apply_output_boost(pcm_data: bytes) -> bytes:
+        boost = APP_CONFIG.get("audio", {}).get("output_boost", 1.0)
+        try:
+            boost = float(boost)
+        except Exception:
+            boost = 1.0
+
+        if boost <= 0:
+            boost = 1.0
+        if boost == 1.0:
+            return pcm_data
+
+        samples = np.frombuffer(pcm_data, dtype=np.int16).astype(np.float32)
+        samples *= boost
+        samples = np.clip(samples, -32768, 32767).astype(np.int16)
+        return samples.tobytes()
 
     def _initialize_audio(self):
         """初始化音频设备和编解码器"""
@@ -96,6 +117,7 @@ class AudioCodec:
         """解码并播放"""
         try:
             pcm_data = self.decode_audio(opus_data)  # 解码
+            pcm_data = self._apply_output_boost(pcm_data)
             self.output_stream.write(pcm_data)  # 播放
         except Exception:
             pass

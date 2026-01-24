@@ -167,6 +167,19 @@ APP_CONFIG = {
 
 PS：如果还是不行，建议更换其他更易识别的唤醒词。
 
+### Q：`--mode xiaozhi` 本机播放时，小智语音声音偏小？
+
+你可以调大 `config.py` 里的 `audio.output_boost`，让客户端在播放前把 PCM 做一次放大（过大会爆音/失真）。
+
+```py
+APP_CONFIG = {
+    "audio": {
+        "output_boost": 2.0,
+    },
+    # ... 其他配置
+}
+```
+
 ### Q: 我想自己编译运行，模型文件在哪里下载？
 
 由于 ASR 相关模型文件体积较大，并未直接提交在 git 仓库中，你可以在 release 中下载 [VAD + KWS 相关模型](https://github.com/idootop/open-xiaoai/releases/tag/vad-kws-models)，然后解压到 `xiaozhi/models` 路径下即可。

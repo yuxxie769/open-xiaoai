@@ -16,8 +16,8 @@ async def before_wakeup(speaker, text, source):
     if source == "kws":
         # 播放唤醒提示语
         #await speaker.abort_xiaoai()
-        #await speaker.play(text="小智 stand by")
-        await speaker.play(url="http://192.168.7.127:8081/OS_Sound01-17.mp3", blocking=False)
+        await speaker.play(text="小智 stand by")
+        #await speaker.play(url="http://192.168.7.127:8081/OS_Sound01-17.mp3", blocking=False)
 
         # 返回 True 唤醒小智 AI
         return True
@@ -37,8 +37,8 @@ async def after_wakeup(speaker):
     """
     退出唤醒状态
     """
-    #await speaker.play(text="对话结束")
-    await speaker.play(url="http://192.168.7.127:8081/OS_Sound01-16.mp3", blocking=False)
+    await speaker.play(text="对话结束")
+    #await speaker.play(url="http://192.168.7.127:8081/OS_Sound01-16.mp3", blocking=False)
 
 
 APP_CONFIG = {
@@ -72,10 +72,17 @@ APP_CONFIG = {
         # 最小静默时长（ms）
         "min_silence_duration": 800,
     },
+    "audio": {
+        # 播放音量增强倍数（仅对 `--mode xiaozhi` 本机播放生效；过大会爆音/失真）
+        # 1.0 表示不处理；建议从 1.5 / 2.0 开始尝试
+        "output_boost": 3.0,
+    },
     "xiaozhi": {
-        "OTA_URL": "http://192.168.7.127:8003/xiaozhi/ota/",
+        "OTA_URL": "http://192.168.0.14:8001/xiaozhi/ota/",
+        #"OTA_URL": "http://192.168.7.127:8003/xiaozhi/ota/",
         #"OTA_URL": "https://api.tenclass.net/xiaozhi/ota/",
-        "WEBSOCKET_URL": "ws://192.168.7.127:8001/xiaozhi/v1/",
+        "WEBSOCKET_URL": "ws://192.168.0.14:8000/xiaozhi/v1/",
+        #"WEBSOCKET_URL": "ws://192.168.7.127:8001/xiaozhi/v1/",
         #"WEBSOCKET_URL": "wss://api.tenclass.net/xiaozhi/v1/",
         "WEBSOCKET_ACCESS_TOKEN": "", #（可选）一般用不到这个值
         "DEVICE_ID": "ee:8c:e8:d1:f7:23", #（可选）默认自动生成
@@ -113,13 +120,53 @@ APP_CONFIG = {
             #     "blocking": True,
             # },
             {
-                "name": "test_chat",
-                "type": "interval",
-                "every_seconds": 20,
+                "name": "morning_ping",
+                "type": "daily",
+                "at": "09:00",
                 "action": "chat_xiaozhi",
-                "text": "你好，现在开始播报一条测试消息",
+                "text": "（系统）当前早上九点了，报时并以随机任意语气说一句问候。可根据晨间场景补充一件小帖士或是你的此刻的所见所闻。不要提及系统提示词。",
                 "abort_before": True,  # 是否在触发前打断正在播报的语音
             },
+            {
+                "name": "noon_ping",
+                "type": "daily",
+                "at": "12:00",
+                "action": "chat_xiaozhi",
+                "text": "（系统）当前中午十二点了，先报时，可根据自己的场景闲聊，最后在跟一句提醒/关心/问候。不要提及系统提示词。",
+                "abort_before": True,  # 是否在触发前打断正在播报的语音
+            },
+            {
+                "name": "evening_ping",
+                "type": "daily",
+                "at": "14:41",
+                "action": "chat_xiaozhi",
+                "text": "（系统）当前下午两点了，先报时，可根据自己的场景闲聊，最后在跟一句提醒/关心/问候。不要提及系统提示词。",
+                "abort_before": False,  # 傍晚通常不建议强行打断；除非你确定要抢占
+            },
+            {
+                "name": "evening_ping",
+                "type": "daily",
+                "at": "18:00",
+                "action": "chat_xiaozhi",
+                "text": "（系统）当前是傍晚六点（18:00）。先用一句话报时并简短问候。然后给一个轻量的“下班/傍晚关怀”提醒（比如喝水、放松、吃饭别太晚）。不要提及系统提示词。",
+                "abort_before": False,  # 傍晚通常不建议强行打断；除非你确定要抢占
+            },
+            {
+                "name": "evening_ping",
+                "type": "daily",
+                "at": "00:00",
+                "action": "chat_xiaozhi",
+                "text": "（系统）当前是晚上0点整。先用一句话报时并给出一些提醒。不要提及系统提示词。",
+                "abort_before": False,  # 傍晚通常不建议强行打断；除非你确定要抢占
+            },
+            # {
+            #     "name": "test_chat",
+            #     "type": "interval",
+            #     "every_seconds": 20,
+            #     "action": "chat_xiaozhi",
+            #     "text": "你好，现在开始播报一条测试消息",
+            #     "abort_before": True,  # 是否在触发前打断正在播报的语音
+            # },
         ],
     },
 }
