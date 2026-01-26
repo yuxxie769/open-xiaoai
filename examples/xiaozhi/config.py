@@ -78,18 +78,22 @@ APP_CONFIG = {
         "output_boost": 3.0,
     },
     "xiaozhi": {
-        "OTA_URL": "http://192.168.0.14:8001/xiaozhi/ota/",
-        #"OTA_URL": "http://192.168.7.127:8003/xiaozhi/ota/",
+        #"OTA_URL": "http://192.168.0.14:8001/xiaozhi/ota/",
+        "OTA_URL": "http://192.168.7.127:8003/xiaozhi/ota/",
         #"OTA_URL": "https://api.tenclass.net/xiaozhi/ota/",
-        "WEBSOCKET_URL": "ws://192.168.0.14:8000/xiaozhi/v1/",
-        #"WEBSOCKET_URL": "ws://192.168.7.127:8001/xiaozhi/v1/",
+        #"WEBSOCKET_URL": "ws://192.168.0.14:8000/xiaozhi/v1/",
+        "WEBSOCKET_URL": "ws://192.168.7.127:8100/xiaozhi/v1/",
         #"WEBSOCKET_URL": "wss://api.tenclass.net/xiaozhi/v1/",
         "WEBSOCKET_ACCESS_TOKEN": "", #（可选）一般用不到这个值
-        "DEVICE_ID": "ee:8c:e8:d1:f7:23", #（可选）默认自动生成
+        "DEVICE_ID": "00:d4:9e:be:39:7a",
+        #"DEVICE_ID": "00:d4:9e:be:39:7a", #（可选）默认自动生成
         "VERIFICATION_CODE": "", 
         #"VERIFICATION_CODE": "266268", # 首次登陆时，验证码会在这里更新
     },
     "schedule": {
+        # timezone (optional): set explicit tz for daily jobs (useful if Docker/host is UTC)
+        # examples: "Asia/Shanghai", "+08:00", "UTC+8"
+        # "timezone": "Asia/Shanghai",
         # 定时任务（可选）
         # - type=interval: 每隔 N 秒触发一次（every_seconds）
         # - type=daily: 每天 HH:MM 触发一次（at）

@@ -5,7 +5,7 @@ import threading
 import time
 
 from xiaozhi.event import EventManager
-from xiaozhi.ref import set_xiaozhi
+from xiaozhi.ref import get_speaker, get_xiaoai, set_xiaozhi
 from xiaozhi.services.audio.kws import KWS
 from xiaozhi.services.audio.vad import VAD
 from xiaozhi.services.protocols.typing import (
@@ -254,8 +254,89 @@ class XiaoZhi:
                 self._handle_stt_message(data)
             elif msg_type == "llm":
                 self._handle_llm_message(data)
+            elif msg_type in ("command", "cmd"):
+                self._handle_command_message(data)
         except Exception:
             pass
+
+    def _handle_command_message(self, data: dict):
+        """
+        Handle server-initiated commands.
+
+        Expected payload examples:
+        - {"type":"command","action":"chat_xiaozhi","text":"...","abort_before":true}
+        - {"type":"command","action":"wake","silent":true}
+        - {"type":"command","action":"play_tts","text":"...","wake_up":true,"silent_wake":true,"blocking":false}
+        """
+        action = (data.get("action") or "").strip()
+        if not action:
+            return
+
+        if action == "chat_xiaozhi":
+            text = data.get("text", "")
+            if not text or not self.protocol:
+                return
+
+            if bool(data.get("abort_before", False)) and self.device_state == DeviceState.SPEAKING:
+                asyncio.run_coroutine_threadsafe(
+                    self.protocol.send_abort_speaking(AbortReason.ABORT),
+                    self.loop,
+                )
+
+            session_id = getattr(self.protocol, "session_id", "") or ""
+            payload = {
+                "type": "listen",
+                "state": "detect",
+                "text": text,
+                "source": "server_push",
+                "session_id": session_id,
+            }
+            asyncio.run_coroutine_threadsafe(
+                self.protocol.send_text(json.dumps(payload, ensure_ascii=False)),
+                self.loop,
+            )
+            return
+
+        speaker = get_speaker()
+        if speaker is None:
+            return
+
+        xiaoai = get_xiaoai()
+        speaker_loop = getattr(xiaoai, "async_loop", None) if xiaoai else None
+        if speaker_loop is None:
+            return
+
+        async def _run_speaker_command():
+            wake_up = bool(data.get("wake_up", True))
+            silent_wake = bool(data.get("silent_wake", True))
+            blocking = bool(data.get("blocking", False))
+
+            if action == "wake":
+                await speaker.wake_up(True, silent=bool(data.get("silent", True)))
+                return
+
+            if wake_up:
+                await speaker.wake_up(True, silent=silent_wake)
+
+            if action == "play_tts":
+                text = data.get("text", "")
+                if text:
+                    await speaker.play(text=text, blocking=blocking)
+                return
+
+            if action == "play_url":
+                url = data.get("url", "")
+                if url:
+                    await speaker.play(url=url, blocking=blocking)
+                return
+
+            if action == "ask_xiaoai":
+                text = data.get("text", "")
+                if text:
+                    await speaker.ask_xiaoai(text, silent=silent_wake)
+                return
+
+        asyncio.run_coroutine_threadsafe(_run_speaker_command(), speaker_loop)
 
     def _handle_tts_message(self, data):
         """处理TTS消息"""

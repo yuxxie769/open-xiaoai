@@ -43,6 +43,10 @@ APP_CONFIG = {
     },
     "schedule": {
         # 定时任务（可选）
+        # 时区（可选）：Docker/服务器默认 UTC 时，建议显式设置避免 daily 任务偏移
+        # - IANA 时区名：如 "Asia/Shanghai"
+        # - 固定偏移：如 "+08:00" / "UTC+8"
+        # "timezone": "Asia/Shanghai",
         "jobs": [
             # 每天 07:30 唤醒并播放音频链接
             # {"type": "daily", "at": "07:30", "action": "play_url", "url": "https://example.com/hello.mp3", "silent_wake": False},
@@ -53,6 +57,21 @@ APP_CONFIG = {
         ]
     },
 }
+```
+
+### Server Push (Optional)
+
+If your upstream server can actively push JSON messages to this client over the existing WebSocket,
+you can trigger actions without a local wake word.
+
+Client supports `type: "command"` / `type: "cmd"`:
+
+```json
+{"type":"command","action":"chat_xiaozhi","text":"...","abort_before":true}
+{"type":"command","action":"play_tts","text":"...","wake_up":true,"silent_wake":true,"blocking":false}
+{"type":"command","action":"play_url","url":"https://example.com/a.mp3"}
+{"type":"command","action":"ask_xiaoai","text":"turn on the light"}
+{"type":"command","action":"wake","silent":true}
 ```
 
 ### Docker 运行

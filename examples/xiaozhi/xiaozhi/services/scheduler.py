@@ -3,12 +3,17 @@ import asyncio
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 from config import APP_CONFIG
 from xiaozhi.ref import get_speaker, get_xiaoai, get_xiaozhi
 from xiaozhi.services.protocols.typing import AbortReason, DeviceState
+
+try:
+    from zoneinfo import ZoneInfo
+except Exception:  # pragma: no cover
+    ZoneInfo = None  # type: ignore[assignment]
 
 ScheduleType = Literal["interval", "daily"]
 ScheduleAction = Literal["play_url", "play_tts", "ask_xiaoai", "chat_xiaozhi"]
@@ -55,6 +60,49 @@ def _next_daily_run(now: datetime, at: str) -> datetime:
     if target <= now:
         target = target + timedelta(days=1)
     return target
+
+
+def _parse_timezone(value: str | None):
+    if not value:
+        return None
+
+    tz = str(value).strip()
+    if not tz or tz.lower() in {"local", "system", "default"}:
+        return None
+
+    # Support fixed-offset forms: "+08:00", "UTC+8", "GMT-0530", etc.
+    upper = tz.upper()
+    for prefix in ("UTC", "GMT"):
+        if upper.startswith(prefix):
+            tz = tz[len(prefix) :].strip()
+            break
+
+    if tz and tz[0] in {"+", "-"}:
+        sign = 1 if tz[0] == "+" else -1
+        rest = tz[1:]
+        if ":" in rest:
+            hours_str, minutes_str = rest.split(":", 1)
+        elif len(rest) in {1, 2}:
+            hours_str, minutes_str = rest, "0"
+        elif len(rest) == 4:
+            hours_str, minutes_str = rest[:2], rest[2:]
+        else:
+            hours_str, minutes_str = "", ""
+        try:
+            hours = int(hours_str)
+            minutes = int(minutes_str)
+            offset = timedelta(hours=hours, minutes=minutes) * sign
+            return timezone(offset)
+        except Exception:
+            return None
+
+    if ZoneInfo is None:
+        return None
+
+    try:
+        return ZoneInfo(tz)
+    except Exception:
+        return None
 
 
 async def _execute_job(job: ScheduleJob):
@@ -120,16 +168,21 @@ class Scheduler:
     _stop_event = threading.Event()
     _threads: list[threading.Thread] = []
     _started = False
+    _tzinfo = None
 
     @classmethod
     def start(cls):
         if cls._started:
             return
 
-        jobs = cls._load_jobs(APP_CONFIG.get("schedule"))
+        schedule_config = APP_CONFIG.get("schedule")
+        jobs = cls._load_jobs(schedule_config)
         if not jobs:
             return
 
+        cls._tzinfo = _parse_timezone(
+            schedule_config.get("timezone") if isinstance(schedule_config, dict) else None
+        )
         cls._stop_event.clear()
         cls._threads = []
 
@@ -189,7 +242,7 @@ class Scheduler:
                     if not job.at:
                         time.sleep(1)
                         continue
-                    now = datetime.now()
+                    now = datetime.now(tz=cls._tzinfo)
                     next_run = _next_daily_run(now, job.at)
                     sleep_seconds = max(0.0, (next_run - now).total_seconds())
                     if cls._stop_event.wait(timeout=sleep_seconds):

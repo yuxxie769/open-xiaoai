@@ -2,7 +2,7 @@
   "editor.tabSize": 2,
   "editor.insertSpaces": true,
   "editor.formatOnSave": true,
-  "python.languageServer": "Pylance",
+  "python.languageServer": "None",
   "python.analysis.autoImportCompletions": true,
   "ruff.organizeImports": true,
   "[python]": {
