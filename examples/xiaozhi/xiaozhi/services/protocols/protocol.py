@@ -41,21 +41,26 @@ class Protocol:
         message = {"session_id": self.session_id, "type": reason}
         await self.send_text(json.dumps(message))
 
+    # 发送json，通知服务端“开始接收音频”
     async def send_start_listening(self, mode):
         """发送开始监听的消息"""
+        # 1. 定义监听模式的映射字典
         mode_map = {
             ListeningMode.ALWAYS_ON: "realtime",
             ListeningMode.AUTO_STOP: "auto",
             ListeningMode.MANUAL: "manual",
         }
+        # 2. 构建要发送的消息字典
         message = {
             "session_id": self.session_id,
             "type": "listen",
             "state": "start",
             "mode": mode_map[mode],
         }
+        # 3. 异步发送JSON格式的消息文本
         await self.send_text(json.dumps(message))
 
+    # 发送json，通知服务端“停止接收音频”
     async def send_stop_listening(self):
         """发送停止监听的消息"""
         message = {"session_id": self.session_id, "type": "listen", "state": "stop"}

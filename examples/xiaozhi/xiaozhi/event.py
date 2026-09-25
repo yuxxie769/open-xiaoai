@@ -175,13 +175,13 @@ class __EventManager:
         ## 如果用户说话了，当前是on_speech STEP, 进入录音，也就是所谓的连续对话开始了
         # 开始说话
         set_speech_frames(speech_buffer) # 把刚刚 VAD 检测到的那点“开头音频”先存起来（避免漏掉第一句话开头），codec音箱录音流会自动拼接进第一句话
-        codec.input_stream.start_stream()  # 音箱开启麦克风录音，虽然后面set_device_state为LISTENING时也会自动开启
-        await xiaozhi.protocol.send_start_listening(ListeningMode.MANUAL) #通知服务端接收录音
+        codec.input_stream.start_stream()  # 音箱开启麦克风录音，虽然后面set_device_state为LISTENING后，xiaozhi主循环也会自动开启
+        await xiaozhi.protocol.send_start_listening(ListeningMode.MANUAL) #json通知服务端接下来要发音频了
         xiaozhi.set_device_state(DeviceState.LISTENING) # 设备状态设置为LISTENING状态
 
         # 重新监测静音，等待说话结束
         vad.resume("silence")
-        step, _ = await self.wait_next_step() # 停，继续等待更新静音STEP
+        step, _ = await self.wait_next_step() # 停，继续等待说话结束，更新静音STEP
         if step != Step.on_silence:
             return
 
@@ -189,8 +189,8 @@ class __EventManager:
         ####################
 
         # 停止说话了，停止录音，设备回到IDLE状态
-        await xiaozhi.protocol.send_stop_listening() #通知服务端停止接收录音
-        xiaozhi.set_device_state(DeviceState.IDLE) # call设备状态set会自动 停止音箱录音
+        await xiaozhi.protocol.send_stop_listening() #json通知服务端接下来停止发送音频了
+        xiaozhi.set_device_state(DeviceState.IDLE) # 设备状态设置回IDLE，xiaozhi主循环会停止音箱录音
 
     # 唤醒音箱
     async def wakeup(self, text, source):

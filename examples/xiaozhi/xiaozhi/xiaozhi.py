@@ -141,7 +141,8 @@ class XiaoZhi:
         except Exception as e:
             self.alert("错误", f"初始化音频设备失败: {e}")
 
-        threading.Thread(target=self._audio_input_event_trigger, daemon=True).start()
+        #启动单独线程，轮询 input_stream 是否 active，如果active说明在录音，则触发AUDIO_INPUT_READY_EVENT，用于激活主循环中的方法进行音频处理并发送服务端
+        threading.Thread(target=self._audio_input_event_trigger, daemon=True).start() 
 
     def _initialize_display(self):
         """初始化显示界面"""
@@ -168,17 +169,25 @@ class XiaoZhi:
 
     def _main_loop(self):
         """应用程序主循环"""
+        # 1. 标记主循环为运行状态
         self.running = True
 
+        # 2. 主循环核心：只要 running 为 True，就持续执行
         while self.running:
-            # 等待事件
+            # 3. 遍历所有已注册的事件，检查是否有事件被触发
             for event_type, event in self.events.items():
+                # 4. 判断当前事件是否被设置（触发）
                 if event.is_set():
+                    # 5. 清除事件的触发状态（避免重复处理）
                     event.clear()
 
+                    # 6. 根据事件类型执行对应的处理逻辑
+                    # AUDIO_INPUT_READY_EVENT 代表“现在有音频输入流处于 active（可读）”
                     if event_type == EventType.AUDIO_INPUT_READY_EVENT:
+                        # 处理音频输入就绪事件（比如读取、发送音频数据）
                         self._handle_input_audio()
                     elif event_type == EventType.SCHEDULE_EVENT:
+                        # 处理定时任务事件（比如执行计划内的操作）
                         self._process_scheduled_tasks()
 
             time.sleep(0.01)
@@ -206,12 +215,16 @@ class XiaoZhi:
             self.main_tasks.append(callback)
         self.events[EventType.SCHEDULE_EVENT].set()
 
+    # 用于主循环处理音频并发送给客户端
     def _handle_input_audio(self):
         """处理音频输入"""
+        # 如果设备状态不是LISTENING，不进行音频处理。
+        # 这是业务状态闸门，即使AUDIO_INPUT_READY_EVENT是触发的，代表麦克风有输入【可能是背景音】，但是因为没到该监听流程故不能继续处理音频
         if self.device_state != DeviceState.LISTENING:
             return
 
-        encoded_data = self.audio_codec.read_audio()
+        encoded_data = self.audio_codec.read_audio() # 拼接VAD缓存+当前录制的PCM音频帧，再编码成Opus输出为encoded_data
+        # 如果拿到Opus音频帧，同时ws连接正常，那么就发送音频帧encoded_data到服务端
         if encoded_data and self.protocol and self.protocol.is_audio_channel_opened():
             asyncio.run_coroutine_threadsafe(
                 self.protocol.send_audio(encoded_data), self.loop
@@ -219,6 +232,11 @@ class XiaoZhi:
 
     def _on_network_error(self, message):
         """网络错误回调"""
+        # CLI 模式下 display 不输出，必须打印到控制台，方便排查连接问题
+        if message:
+            print(f"⚠️ 网络错误：{message}")
+            self.alert("网络错误", message)
+
         self.set_device_state(DeviceState.IDLE)
         if self.device_state != DeviceState.CONNECTING:
             self.set_device_state(DeviceState.IDLE)
@@ -256,6 +274,9 @@ class XiaoZhi:
                 self._handle_llm_message(data)
             elif msg_type in ("command", "cmd"):
                 self._handle_command_message(data)
+            else:
+                # 打印未知消息，便于排查服务端为何未返回 hello/为何断开
+                print(f"📩 收到未处理的消息: {data}")
         except Exception:
             pass
 
@@ -392,10 +413,14 @@ class XiaoZhi:
         """音频通道打开回调"""
         self.set_device_state(DeviceState.IDLE)
 
+    # 检查音响麦克风是否有输入
     def _audio_input_event_trigger(self):
         """音频输入事件触发器"""
+        # 1. 循环控制：只要程序主开关 running 为 True，就持续执行
         while self.running:
+            # 2. 检查音频输入流是否活跃（是否有音频数据可读）
             if self.audio_codec.input_stream.is_active():
+                # 3. 如有输入，触发“音频输入就绪”事件（给主循环发信号）
                 self.events[EventType.AUDIO_INPUT_READY_EVENT].set()
             time.sleep(0.01)
 

@@ -38,7 +38,6 @@ class ConfigManager:
 
         self._initialize_client_id()
         self._initialize_device_id()
-        self._initialize_mqtt_info()
 
     def get_client_id(self) -> str:
         """获取客户端ID"""
@@ -148,16 +147,22 @@ class ConfigManager:
             mqtt_info = self._get_ota_version()
             if mqtt_info:
                 self.update_config("MQTT_INFO", mqtt_info)
+                print("✅ 已从 OTA 服务获取 MQTT 配置")
                 return mqtt_info
             else:
                 return self.get_config("MQTT_INFO")
-        except Exception:
+        except Exception as e:
+            # 这里不能静默吞掉错误，否则用户无法排查 OTA_URL/网络/服务端问题
+            print(f"⚠️ 获取 OTA 配置失败：{e}")
             return self.get_config("MQTT_INFO")
 
     def _get_ota_version(self):
         """获取OTA服务器的MQTT信息"""
         MAC_ADDR = self.get_device_id()
         OTA_URL = self.get_config("NETWORK.OTA_URL")
+        if not OTA_URL:
+            raise ValueError("OTA_URL 为空，请检查 config.py 的 APP_CONFIG['xiaozhi']['OTA_URL']")
+
         headers = {
             "Activation-Version": "1",
             "Device-Id": MAC_ADDR,
@@ -195,6 +200,9 @@ class ConfigManager:
         }
 
         try:
+            print(
+                f"🌐 请求 OTA：{OTA_URL} (device_id={MAC_ADDR}, ip={payload['board']['ip']})"
+            )
             # 发送请求到OTA服务器
             response = requests.post(
                 OTA_URL,
@@ -205,16 +213,36 @@ class ConfigManager:
 
             # 检查HTTP状态码
             if response.status_code != 200:
-                raise ValueError(f"OTA服务器返回错误状态码: {response.status_code}")
+                body_preview = (response.text or "").strip().replace("\n", "\\n")[:300]
+                raise ValueError(
+                    f"OTA 服务器返回错误状态码: {response.status_code}，body: {body_preview}"
+                )
 
             # 解析JSON数据
-            response_data = response.json()
+            try:
+                response_data = response.json()
+            except ValueError as e:
+                body_preview = (response.text or "").strip().replace("\n", "\\n")[:300]
+                raise ValueError(
+                    f"OTA 返回非 JSON 响应，body: {body_preview}"
+                ) from e
 
-            if "mqtt" in response_data:
-                return response_data["mqtt"]
-            else:
-                raise ValueError("OTA服务器返回的数据无效，请检查服务器状态或MAC地址！")
+            mqtt_info = None
+            if isinstance(response_data, dict):
+                mqtt_info = response_data.get("mqtt")
+                if mqtt_info is None and isinstance(response_data.get("data"), dict):
+                    mqtt_info = response_data["data"].get("mqtt")
+                if mqtt_info is None and isinstance(response_data.get("result"), dict):
+                    mqtt_info = response_data["result"].get("mqtt")
+
+            if mqtt_info:
+                return mqtt_info
+
+            body_preview = str(response_data)[:500]
+            raise ValueError(
+                f"OTA服务器返回的数据无效（未找到 mqtt 字段），请检查服务器状态或MAC地址！response: {body_preview}"
+            )
         except requests.Timeout:
-            raise ValueError("OTA请求超时！请稍后重试。")
-        except requests.RequestException:
-            raise ValueError("无法连接到OTA服务器，请检查网络连接！")
+            raise ValueError(f"OTA 请求超时(10s)：{OTA_URL}")
+        except requests.RequestException as e:
+            raise ValueError(f"无法连接到 OTA 服务器：{OTA_URL}，错误：{e}") from e

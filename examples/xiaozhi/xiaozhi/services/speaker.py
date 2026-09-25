@@ -55,6 +55,27 @@ class SpeakerManager:
         if buffer is not None:
             return get_xiaoai().on_output_data(buffer)
 
+        original_url = url
+
+        # 注意：SpeakerManager 的 url 播放是在“音箱设备”上执行的（通过 run_shell）。
+        # 所以像 "/Users/xxx/a.mp3" 这类“电脑路径”，音箱端是绝对读不到的。
+        if (
+            isinstance(original_url, str)
+            and "://" not in original_url
+            and (original_url.startswith("/Users/") or (len(original_url) >= 3 and original_url[1:3] in {":\\", ":/"}))
+        ):
+            print(
+                "⚠️ 你填写的是电脑上的本地文件路径，音箱端无法直接读取。"
+                "请改用 http(s):// 方式（在电脑开静态文件服务），或先把文件上传到音箱再用 file:/// 设备路径播放。"
+            )
+            return False
+
+        # miplayer/mediaplayer 在很多固件上更倾向使用 URI：
+        # - 远端：http(s)://...
+        # - 本地：file:///path/to/file
+        if url and "://" not in url and str(url).startswith("/"):
+            url = f"file://{url}"
+
         if blocking:
             command = (
                 f"miplayer -f '{url}'"
@@ -62,6 +83,16 @@ class SpeakerManager:
                 else f"/usr/sbin/tts_play.sh '{text.replace("'", "'\\''") or '你好'}'"
             )
             res = await self.run_shell(command, timeout=timeout)
+            if res.exit_code != 0:
+                if url:
+                    hint = ""
+                    if original_url and str(original_url).startswith("/"):
+                        hint = "（注意：这是音箱设备上的路径，不是你电脑的路径）"
+                    stderr_preview = (res.stderr or "").strip().replace("\n", "\\n")[:300]
+                    print(f"⚠️ 播放音频失败{hint}: {original_url or url}，stderr: {stderr_preview}")
+                else:
+                    stderr_preview = (res.stderr or "").strip().replace("\n", "\\n")[:300]
+                    print(f"⚠️ TTS 播放失败: {stderr_preview}")
             return res.exit_code == 0
 
         if url:
@@ -72,7 +103,18 @@ class SpeakerManager:
             command = f"ubus call mibrain text_to_speech '{data}'"
 
         res = await self.run_shell(command, timeout=timeout)
-        return '"code": 0' in res.stdout if res else False
+        ok = '"code": 0' in res.stdout if res else False
+        if not ok:
+            if url:
+                hint = ""
+                if original_url and str(original_url).startswith("/"):
+                    hint = "（注意：这是音箱设备上的路径，不是你电脑的路径）"
+                stderr_preview = (res.stderr or "").strip().replace("\n", "\\n")[:300]
+                print(f"⚠️ 播放音频失败{hint}: {original_url or url}，stderr: {stderr_preview}")
+            else:
+                stderr_preview = (res.stderr or "").strip().replace("\n", "\\n")[:300]
+                print(f"⚠️ TTS 播放失败: {stderr_preview}")
+        return ok
 
     async def wake_up(self, awake=True, silent=True):
         """

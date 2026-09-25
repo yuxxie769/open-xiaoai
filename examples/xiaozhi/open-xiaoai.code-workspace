@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"name": "open-xiaoai",
+			"path": "../.."
+		},
+		{
+			"name": "test",
+			"path": "../../../xiaozhi-esp32-server/main/xiaozhi-server/test"
+		}
+	],
+	"settings": {}
+}
